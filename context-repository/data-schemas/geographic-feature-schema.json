@@ -1,0 +1,246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Geographic Feature Schema",
+  "type": "object",
+  "description": "Schema for geographic features like mountains, rivers, lakes, etc.",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the geographic feature"
+    },
+    "name": {
+      "type": "string",
+      "description": "Name of the geographic feature"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "mountain",
+        "mountain_range", 
+        "river",
+        "lake",
+        "sea",
+        "ocean",
+        "desert",
+        "forest",
+        "plateau",
+        "valley",
+        "canyon",
+        "island",
+        "peninsula",
+        "strait",
+        "bay",
+        "gulf"
+      ],
+      "description": "Type of geographic feature"
+    },
+    "coordinates": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Single point coordinates [longitude, latitude]"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "description": "Array of coordinates for linear or polygon features"
+        }
+      ]
+    },
+    "countries": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]{2,3}$"
+      },
+      "description": "Country codes where this feature is located"
+    },
+    "properties": {
+      "type": "object",
+      "description": "Type-specific properties",
+      "properties": {
+        "elevation": {
+          "type": "number",
+          "description": "Elevation in meters (for mountains, peaks)"
+        },
+        "depth": {
+          "type": "number", 
+          "description": "Maximum depth in meters (for lakes, seas)"
+        },
+        "length": {
+          "type": "number",
+          "description": "Length in kilometers (for rivers, mountain ranges)"
+        },
+        "area": {
+          "type": "number",
+          "description": "Surface area in square kilometers"
+        },
+        "volume": {
+          "type": "number",
+          "description": "Volume in cubic kilometers (for water bodies)"
+        },
+        "flow": {
+          "type": "number",
+          "description": "Flow rate in cubic meters per second (for rivers)"
+        }
+      }
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the feature"
+    },
+    "significance": {
+      "type": "object",
+      "properties": {
+        "ecological": {
+          "type": "string",
+          "description": "Ecological importance"
+        },
+        "cultural": {
+          "type": "string", 
+          "description": "Cultural or historical significance"
+        },
+        "economic": {
+          "type": "string",
+          "description": "Economic importance"
+        }
+      }
+    },
+    "formation": {
+      "type": "object",
+      "description": "How the feature was formed",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "tectonic",
+            "volcanic", 
+            "erosional",
+            "glacial",
+            "fluvial",
+            "coastal",
+            "depositional"
+          ]
+        },
+        "age": {
+          "type": "string",
+          "description": "Geological age or formation period"
+        },
+        "process": {
+          "type": "string",
+          "description": "Formation process description"
+        }
+      }
+    },
+    "climate": {
+      "type": "object",
+      "description": "Climate characteristics",
+      "properties": {
+        "zone": {
+          "type": "string",
+          "enum": [
+            "tropical",
+            "arid", 
+            "temperate",
+            "continental",
+            "polar",
+            "mediterranean",
+            "oceanic"
+          ]
+        },
+        "precipitation": {
+          "type": "number",
+          "description": "Annual precipitation in millimeters"
+        },
+        "temperature": {
+          "type": "object",
+          "properties": {
+            "average": {"type": "number"},
+            "min": {"type": "number"},
+            "max": {"type": "number"}
+          }
+        }
+      }
+    },
+    "biodiversity": {
+      "type": "object",
+      "description": "Biodiversity information",
+      "properties": {
+        "ecosystems": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "endemicSpecies": {
+          "type": "number",
+          "description": "Number of endemic species"
+        },
+        "protectedStatus": {
+          "type": "string",
+          "enum": [
+            "national_park",
+            "world_heritage",
+            "biosphere_reserve", 
+            "ramsar_site",
+            "protected_area",
+            "none"
+          ]
+        }
+      }
+    },
+    "accessibility": {
+      "type": "object",
+      "description": "Access and tourism information",
+      "properties": {
+        "access": {
+          "type": "string",
+          "enum": ["easy", "moderate", "difficult", "restricted"]
+        },
+        "nearestCity": {
+          "type": "string",
+          "description": "Nearest major city"
+        },
+        "tourism": {
+          "type": "boolean",
+          "description": "Whether it's a tourist destination"
+        },
+        "activities": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Available activities"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Data metadata",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Data source"
+        },
+        "accuracy": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "Whether the data has been verified"
+        }
+      }
+    }
+  },
+  "required": ["id", "name", "type", "coordinates", "countries"],
+  "additionalProperties": false
+}

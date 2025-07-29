@@ -1,0 +1,212 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Performance Optimization Animations - Phase 3 Priority 3B */
+@layer utilities {
+  /* Shimmer animation for skeleton loading */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s ease-in-out infinite;
+  }
+  
+  /* Wave animation for skeleton loading */
+  @keyframes wave {
+    0%, 60%, 100% {
+      transform: initial;
+    }
+    30% {
+      transform: translateY(-15px);
+    }
+  }
+  
+  .animate-wave {
+    animation: wave 2s ease-in-out infinite;
+  }
+  
+  /* Smooth fade in animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  /* Loading dots animation */
+  @keyframes loadingDots {
+    0%, 20% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.5);
+      opacity: 0.7;
+    }
+    80%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  .animate-loading-dots {
+    animation: loadingDots 1.4s ease-in-out infinite;
+  }
+  
+  /* Performance-aware animations */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shimmer,
+    .animate-wave,
+    .animate-fade-in,
+    .animate-loading-dots {
+      animation: none;
+    }
+    
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  
+  /* Mobile-optimized animations */
+  @media (max-width: 768px) {
+    .animate-shimmer {
+      animation-duration: 1.5s; /* Faster on mobile */
+    }
+    
+    .animate-wave {
+      animation-duration: 1.5s;
+    }
+  }
+  
+  /* Battery-saving mode */
+  .performance-battery .animate-shimmer,
+  .performance-battery .animate-wave,
+  .performance-battery .animate-loading-dots {
+    animation: none;
+  }
+  
+  /* High performance mode */
+  .performance-high .animate-shimmer {
+    animation-duration: 1s;
+  }
+  
+  .performance-high .animate-wave {
+    animation-duration: 1s;
+  }
+}
+
+/* Performance monitoring styles */
+@layer components {
+  .performance-indicator {
+    @apply fixed top-4 right-4 bg-black/80 text-white p-2 rounded text-xs font-mono z-50;
+  }
+  
+  .performance-indicator.performance-good {
+    @apply bg-green-600/80;
+  }
+  
+  .performance-indicator.performance-warning {
+    @apply bg-yellow-600/80;
+  }
+  
+  .performance-indicator.performance-critical {
+    @apply bg-red-600/80;
+  }
+  
+  .offline-indicator {
+    @apply fixed bottom-4 left-4 bg-gray-800 text-white px-3 py-2 rounded-lg text-sm font-medium z-50;
+  }
+  
+  .loading-overlay {
+    @apply absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-[1000];
+  }
+  
+  .error-boundary {
+    @apply min-h-screen flex items-center justify-center bg-slate-50;
+  }
+  
+  .error-boundary-content {
+    @apply text-center p-8 max-w-md mx-auto;
+  }
+}
+
+/* CSS custom properties for dynamic performance settings */
+:root {
+  --animation-duration: 300ms;
+  --transition-duration: 150ms;
+  --performance-mode: 'balanced';
+}

@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Country Data Schema",
+  "type": "object",
+  "description": "Complete country data structure combining multiple API sources",
+  "properties": {
+    "basic": {
+      "type": "object",
+      "description": "Basic country information from REST Countries API",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2 country code",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "code3": {
+          "type": "string", 
+          "description": "ISO 3166-1 alpha-3 country code",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Common country name"
+        },
+        "officialName": {
+          "type": "string",
+          "description": "Official country name"
+        },
+        "continent": {
+          "type": "string",
+          "enum": ["Africa", "Antarctica", "Asia", "Europe", "North America", "Oceania", "South America"]
+        },
+        "subregion": {
+          "type": "string",
+          "description": "Geographic subregion"
+        },
+        "capital": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Capital city/cities"
+        },
+        "languages": {
+          "type": "object",
+          "description": "Official languages",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "currencies": {
+          "type": "object",
+          "description": "Official currencies",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "symbol": {"type": "string"}
+            }
+          }
+        },
+        "flag": {
+          "type": "object",
+          "properties": {
+            "png": {"type": "string", "format": "uri"},
+            "svg": {"type": "string", "format": "uri"},
+            "alt": {"type": "string"}
+          }
+        }
+      },
+      "required": ["code", "name", "continent"]
+    },
+    "geography": {
+      "type": "object",
+      "description": "Geographic information",
+      "properties": {
+        "coordinates": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Center coordinates [latitude, longitude]"
+        },
+        "area": {
+          "type": "number",
+          "description": "Land area in square kilometers"
+        },
+        "borders": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2,3}$"
+          },
+          "description": "Bordering country codes"
+        },
+        "coastline": {
+          "type": "number",
+          "description": "Coastline length in kilometers"
+        },
+        "elevation": {
+          "type": "object",
+          "properties": {
+            "highest": {"type": "number"},
+            "lowest": {"type": "number"}
+          }
+        }
+      }
+    },
+    "demographics": {
+      "type": "object",
+      "description": "Population and demographic data",
+      "properties": {
+        "population": {
+          "type": "number",
+          "description": "Total population"
+        },
+        "populationDensity": {
+          "type": "number",
+          "description": "Population per square kilometer"
+        },
+        "urbanPopulation": {
+          "type": "number",
+          "description": "Percentage of urban population"
+        },
+        "lifeExpectancy": {
+          "type": "number",
+          "description": "Average life expectancy in years"
+        }
+      }
+    },
+    "economy": {
+      "type": "object",
+      "description": "Economic indicators from World Bank API",
+      "properties": {
+        "gdp": {
+          "type": "number",
+          "description": "Gross Domestic Product in current USD"
+        },
+        "gdpPerCapita": {
+          "type": "number", 
+          "description": "GDP per capita in current USD"
+        },
+        "gdpGrowth": {
+          "type": "number",
+          "description": "Annual GDP growth rate percentage"
+        },
+        "unemployment": {
+          "type": "number",
+          "description": "Unemployment rate percentage"
+        },
+        "inflation": {
+          "type": "number",
+          "description": "Inflation rate percentage"
+        }
+      }
+    },
+    "development": {
+      "type": "object",
+      "description": "Development and quality of life indicators",
+      "properties": {
+        "hdi": {
+          "type": "number",
+          "description": "Human Development Index (0-1)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "educationIndex": {
+          "type": "number",
+          "description": "Education index (0-1)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "healthIndex": {
+          "type": "number",
+          "description": "Health index (0-1)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "gini": {
+          "type": "number",
+          "description": "Gini coefficient for income inequality",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "administrative": {
+      "type": "object",
+      "description": "Administrative divisions",
+      "properties": {
+        "divisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/administrativeDivision"
+          }
+        },
+        "governmentType": {
+          "type": "string",
+          "description": "Type of government"
+        },
+        "independence": {
+          "type": "string",
+          "format": "date",
+          "description": "Independence date"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Data metadata",
+      "properties": {
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dataQuality": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        }
+      }
+    }
+  },
+  "definitions": {
+    "administrativeDivision": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "type": {
+          "type": "string",
+          "enum": ["state", "province", "territory", "region", "district", "county"]
+        },
+        "capital": {"type": "string"},
+        "population": {"type": "number"},
+        "area": {"type": "number"},
+        "coordinates": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": ["id", "name", "type"]
+    }
+  },
+  "required": ["basic", "geography"]
+}
