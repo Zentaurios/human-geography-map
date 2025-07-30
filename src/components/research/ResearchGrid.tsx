@@ -18,8 +18,8 @@ const ResearchGrid: React.FC<ResearchGridProps> = ({ papers }) => {
   const [sortMode, setSortMode] = useState<SortMode>('relevance');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedPaper, setSelectedPaper] = useState<ResearchPaper | null>(null);
-  const [displayCount, setDisplayCount] = useState(6);
-  const PAPERS_PER_PAGE = 6;
+  const [displayCount, setDisplayCount] = useState(12);
+  const PAPERS_PER_PAGE = 12;
 
   // Sort papers based on current sort mode and direction
   const sortedPapers = React.useMemo(() => {

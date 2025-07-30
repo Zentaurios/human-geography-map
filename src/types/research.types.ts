@@ -23,6 +23,9 @@ export interface ResearchPaper {
   keyFindings: string[];
   methodology: string;
   relevanceScore: number; // 1-10 for educational value
+  // Enhanced fields added by processing
+  estimatedReadingTime?: number;
+  freshnessScore?: number;
 }
 
 export interface ResearchFilters {
@@ -39,14 +42,11 @@ export interface ResearchFilters {
   };
   methodology: ('quantitative' | 'qualitative' | 'mixed' | 'theoretical')[];
   geographySubfield: string[];
+  enhanceWithGeography: boolean; // Toggle to enhance searches with geography terms
 }
 
 export interface AcademicAPIs {
-  semanticScholar: {
-    baseUrl: string;
-    rateLimit: string;
-    requiresAuth: boolean;
-  };
+  // Removed semanticScholar - not suitable for multi-user applications
   openAlex: {
     baseUrl: string;
     rateLimit: string;

@@ -1,0 +1,445 @@
+'use server';
+
+/**
+ * ⚠️ DEPRECATED: Semantic Scholar API Integration
+ * 
+ * This file is no longer used in the application.
+ * Semantic Scholar was removed because:
+ * - Rate limits (100 requests/5 minutes) are too restrictive for multi-user apps
+ * - Shared rate limits across all users create poor UX
+ * - OpenAlex provides better scalability for production use
+ * 
+ * OpenAlex is now the primary and only research API.
+ * See: /src/lib/apis/openAlexApi.ts
+ */
+
+import { ResearchPaper } from '@/types/research.types';
+import { ACADEMIC_APIS } from './academicApis';
+
+/**
+ * Fetch research papers from Semantic Scholar API (primary source)
+ * Using regular search API to avoid 2MB cache limit issues
+ */
+export async function fetchFromSemanticScholar(query: string, enhanceWithGeography: boolean = true): Promise<ResearchPaper[]> {
+  try {
+    // Conditionally enhance query with geography terms based on user preference
+    const searchQuery = enhanceWithGeography ? `${query} geography spatial` : query;
+    
+    // Optimize query parameters for better results and manageable response size
+    const params = new URLSearchParams({
+      query: searchQuery,
+      limit: '50', // Increased back to 50 for better results
+      // Request only essential fields to reduce response size
+      fields: 'paperId,title,abstract,authors,year,venue,citationCount,isOpenAccess,openAccessPdf,fieldsOfStudy',
+    });
+
+    // Prepare headers with API key support
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add API key if available (helps with rate limits)
+    const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY;
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+
+    const response = await fetch(
+      `${ACADEMIC_APIS.semanticScholar.baseUrl}/paper/search?${params}`,
+      {
+        headers,
+        next: { revalidate: 43200 }, // Cache for 12 hours
+      }
+    );
+
+    if (!response.ok) {
+      // Handle rate limits and errors gracefully - return empty array instead of throwing
+      if (response.status === 429) {
+        console.warn('⚠️ Semantic Scholar rate limit hit - falling back to OpenAlex');
+        const retryAfter = response.headers.get('Retry-After');
+        return []; // Let OpenAlex handle the search
+      }
+      
+      console.warn(`⚠️ Semantic Scholar API error: ${response.status} ${response.statusText} - falling back to OpenAlex`);
+      return []; // Let OpenAlex handle the search
+    }
+
+    const data = await response.json();
+    
+    if (!data.data || data.data.length === 0) {
+      return [];
+    }
+
+    // Apply geography filtering based on enhancement setting
+    const filteredResults = data.data
+      .filter((paper: any) => {
+        // Basic content requirements
+        const hasBasicContent = paper.abstract && paper.title && paper.abstract.length > 30;
+        if (!hasBasicContent) return false;
+        
+        // If geography enhancement is disabled, accept all papers with basic content
+        if (!enhanceWithGeography) {
+          return true;
+        }
+        
+        // If geography enhancement is enabled, filter for geography relevance
+        const hasGeographyField = paper.fieldsOfStudy?.some((field: string) => 
+          ['Geography', 'Sociology', 'Environmental Science', 'Political Science', 'Economics', 'Earth Sciences'].includes(field)
+        );
+        
+        const isGeographyRelevant = isGeographyRelevantLenient(paper.title + ' ' + paper.abstract);
+        
+        return hasGeographyField || isGeographyRelevant;
+      })
+      .slice(0, 30); // Take top 30 after filtering
+      
+    return filteredResults.map((paper: any) => transformSemanticScholarPaper(paper));
+      
+  } catch (error) {
+    console.warn('❌ Semantic Scholar API connection error - falling back to OpenAlex:', error);
+    return []; // Let OpenAlex handle the search
+  }
+}
+
+/**
+ * Use bulk search endpoint with optimized parameters to avoid cache issues
+ * This endpoint is designed for retrieving larger datasets with better performance
+ */
+export async function fetchFromSemanticScholarBulk(query: string, enhanceWithGeography: boolean = true): Promise<ResearchPaper[]> {
+  try {
+    // Conditionally enhance query with geography terms
+    const searchQuery = enhanceWithGeography ? `${query} AND geography` : query;
+    
+    // Optimize bulk search to stay under 2MB cache limit
+    const params = new URLSearchParams({
+      query: searchQuery,
+      fields: 'paperId,title,abstract,authors,year,venue,citationCount', // Reduced fields to minimize response size
+      sort: 'citationCount:desc', // Sort by most cited first
+      limit: '100', // Smaller limit to avoid 2MB cache issue
+    });
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY;
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+
+    const response = await fetch(
+      `${ACADEMIC_APIS.semanticScholar.baseUrl}/paper/search/bulk?${params}`,
+      {
+        headers,
+        // Disable caching for bulk search to avoid 2MB limit issues
+        cache: 'no-store'
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('⚠️ Semantic Scholar bulk rate limit hit - falling back to regular search');
+        return []; // Fallback will handle this
+      }
+      console.warn(`⚠️ Semantic Scholar bulk API error: ${response.status} ${response.statusText}`);
+      return []; // Fallback will handle this
+    }
+
+    const data = await response.json();
+    
+    if (!data.data || data.data.length === 0) {
+      return [];
+    }
+
+    // Apply filtering based on geography enhancement setting
+    const filteredResults = data.data
+      .filter((paper: any) => {
+        if (!paper.abstract || paper.abstract.length <= 50) return false;
+        
+        // If geography enhancement is disabled, accept all papers
+        if (!enhanceWithGeography) {
+          return true;
+        }
+        
+        // If geography enhancement is enabled, the query already includes geography terms
+        // so we can be more lenient with filtering
+        return true;
+      })
+      .slice(0, 30); // Take top 30 results
+      
+    return filteredResults.map((paper: any) => transformSemanticScholarPaper(paper));
+      
+  } catch (error) {
+    console.warn('❌ Semantic Scholar Bulk API connection error - falling back to regular search:', error);
+    // Fallback to regular search with additional error handling
+    try {
+      return await fetchFromSemanticScholar(query, enhanceWithGeography);
+    } catch (fallbackError) {
+      console.warn('❌ Semantic Scholar regular search also failed:', fallbackError);
+      return []; // Return empty array if all attempts fail
+    }
+  }
+}
+
+/**
+ * Smart search function that chooses the best endpoint based on query
+ * Prioritizes regular search to avoid cache issues, uses bulk only for complex academic queries
+ */
+export async function smartSemanticScholarSearch(query: string, enhanceWithGeography: boolean = true): Promise<ResearchPaper[]> {
+  // Use bulk search only for very specific academic queries that benefit from it
+  const isBulkBeneficial = query.includes('systematic review') || 
+                          query.includes('meta-analysis') || 
+                          (query.includes('geography') && query.split(' ').length >= 3);
+  
+  if (isBulkBeneficial) {
+    return fetchFromSemanticScholarBulk(query, enhanceWithGeography);
+  } else {
+    return fetchFromSemanticScholar(query, enhanceWithGeography);
+  }
+}
+
+/**
+ * Check if content is geography-relevant using keyword matching (more lenient)
+ */
+function isGeographyRelevantLenient(text: string): boolean {
+  const geographyKeywords = [
+    'geography', 'geographic', 'spatial', 'urban', 'rural', 'city', 'population',
+    'climate', 'environment', 'development', 'planning', 'migration', 'settlement',
+    'region', 'location', 'place', 'territory', 'landscape', 'demographic',
+    'community', 'neighborhood', 'district', 'municipal', 'metropolitan',
+    'housing', 'transport', 'infrastructure', 'land use', 'zoning',
+    'sustainability', 'resilience', 'adaptation', 'vulnerability'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  return geographyKeywords.some(keyword => lowerText.includes(keyword));
+}
+
+/**
+ * Check if content is geography-relevant using keyword matching (original)
+ */
+function isGeographyRelevant(text: string): boolean {
+  const geographyKeywords = [
+    'geography', 'geographic', 'spatial', 'urban', 'rural', 'city', 'population',
+    'climate', 'environment', 'development', 'planning', 'migration', 'settlement',
+    'region', 'location', 'place', 'territory', 'landscape', 'demographic'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  return geographyKeywords.some(keyword => lowerText.includes(keyword));
+}
+
+/**
+ * Transform Semantic Scholar data to our ResearchPaper format
+ */
+function transformSemanticScholarPaper(paper: any): ResearchPaper {
+  const openAccessStatus = getOpenAccessStatus(paper.isOpenAccess, paper.openAccessPdf);
+  const academicLevel = determineAcademicLevel(paper.abstract);
+  const geographySubfields = extractGeographySubfields(paper.fieldsOfStudy);
+  
+  return {
+    id: paper.paperId,
+    title: paper.title,
+    authors: paper.authors?.map((author: any) => ({
+      name: author.name,
+      affiliation: undefined, // Semantic Scholar doesn't provide affiliation in search results
+    })) || [],
+    abstract: paper.abstract,
+    publicationDate: paper.year ? `${paper.year}-01-01` : new Date().toISOString(),
+    journal: paper.venue,
+    doi: undefined, // Not provided in search results
+    url: extractBestSemanticScholarUrl(paper),
+    citationCount: paper.citationCount || 0,
+    openAccessStatus,
+    geographySubfields,
+    academicLevel,
+    summary: generateStudentSummary(paper.abstract),
+    keyFindings: extractKeyFindings(paper.abstract),
+    methodology: identifyMethodology(paper.abstract),
+    relevanceScore: calculateRelevanceScore(paper),
+  };
+}
+
+// Extract the best available URL for accessing the paper from Semantic Scholar
+function extractBestSemanticScholarUrl(paper: any): string | undefined {
+  // Priority order for URLs:
+  // 1. Open access PDF URL
+  // 2. Semantic Scholar page URL (always accessible)
+  // 3. DOI URL if available
+  // 4. No fallback to search URLs
+  
+  // Check for open access PDF
+  if (paper.openAccessPdf?.url) {
+    return paper.openAccessPdf.url;
+  }
+  
+  // Create Semantic Scholar paper page URL as reliable fallback
+  if (paper.paperId) {
+    return `https://www.semanticscholar.org/paper/${paper.paperId}`;
+  }
+  
+  // If we have a DOI, use that
+  if (paper.doi) {
+    const cleanDoi = paper.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '');
+    if (cleanDoi.match(/^10\.[0-9]{4,}\/[\S]+/)) {
+      return `https://doi.org/${cleanDoi}`;
+    }
+  }
+  
+  // Return undefined instead of search URL - let UI handle missing links
+  return undefined;
+}
+
+/**
+ * Helper functions for data transformation
+ */
+function getOpenAccessStatus(isOpenAccess: boolean, openAccessPdf: any): 'gold' | 'green' | 'bronze' | 'closed' {
+  if (!isOpenAccess) return 'closed';
+  if (openAccessPdf && openAccessPdf.url) return 'gold';
+  return 'green'; // Assume green if open access but no PDF URL
+}
+
+function determineAcademicLevel(abstract: string): 'undergraduate' | 'graduate' | 'advanced' {
+  const text = abstract.toLowerCase();
+  
+  // Advanced level indicators
+  const advancedKeywords = ['theoretical framework', 'epistemological', 'ontological', 'meta-analysis', 'systematic review'];
+  // Graduate level indicators  
+  const graduateKeywords = ['methodology', 'empirical', 'hypothesis', 'statistical significance', 'regression analysis'];
+  
+  if (advancedKeywords.some(keyword => text.includes(keyword))) {
+    return 'advanced';
+  }
+  if (graduateKeywords.some(keyword => text.includes(keyword))) {
+    return 'graduate';
+  }
+  
+  return 'undergraduate';
+}
+
+function extractGeographySubfields(fieldsOfStudy: any[]): string[] {
+  if (!fieldsOfStudy) return ['Human Geography'];
+  
+  const geographyFields = fieldsOfStudy
+    .map(field => field.name || field)
+    .filter(name => {
+      const lowerName = name.toLowerCase();
+      return lowerName.includes('geograph') || 
+             ['urban', 'climate', 'population', 'economic', 'cultural', 'political', 'environmental'].some(
+               field => lowerName.includes(field)
+             );
+    })
+    .slice(0, 3);
+    
+  return geographyFields.length > 0 ? geographyFields : ['Human Geography'];
+}
+
+function generateStudentSummary(abstract: string): string {
+  if (!abstract) return 'This research explores important concepts in human geography.';
+  
+  // Simple summarization - take first two sentences and simplify language
+  const sentences = abstract.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  const firstTwoSentences = sentences.slice(0, 2).join('. ') + '.';
+  
+  // Basic language simplification
+  return firstTwoSentences
+    .replace(/\bmethodology\b/gi, 'research method')
+    .replace(/\bempirical\b/gi, 'based on real data')
+    .replace(/\btheoretical\b/gi, 'based on ideas and concepts')
+    .replace(/\bepistemological\b/gi, 'about how we know things')
+    .replace(/\bontological\b/gi, 'about what exists')
+    .replace(/\bparadigm\b/gi, 'approach or way of thinking');
+}
+
+function extractKeyFindings(abstract: string): string[] {
+  if (!abstract) return ['Research findings will be summarized here'];
+  
+  // Extract sentences that contain finding indicators
+  const sentences = abstract.split(/[.!?]+/);
+  const findings = sentences
+    .filter(sentence => {
+      const lowerSentence = sentence.toLowerCase();
+      return lowerSentence.match(/\b(found|show|shows|demonstrate|demonstrates|reveal|reveals|indicate|indicates|suggest|suggests|conclude|concludes|results? show|evidence suggests)\b/);
+    })
+    .slice(0, 3)
+    .map(finding => finding.trim())
+    .filter(finding => finding.length > 10); // Filter out very short findings
+    
+  return findings.length > 0 ? findings : ['Key findings are being analyzed'];
+}
+
+function identifyMethodology(abstract: string): string {
+  const text = abstract.toLowerCase();
+  
+  // Order matters - more specific first
+  if (text.includes('mixed method')) {
+    return 'Mixed methods';
+  }
+  if (text.includes('survey') || text.includes('questionnaire')) {
+    return 'Survey research';
+  }
+  if (text.includes('interview') || text.includes('ethnograph') || text.includes('qualitative')) {
+    return 'Qualitative interviews';
+  }
+  if (text.includes('gis') || text.includes('spatial analysis') || text.includes('geospatial')) {
+    return 'GIS and spatial analysis';
+  }
+  if (text.includes('statistical') || text.includes('regression') || text.includes('quantitative')) {
+    return 'Statistical analysis';
+  }
+  if (text.includes('case study')) {
+    return 'Case study approach';
+  }
+  if (text.includes('review') || text.includes('meta-analysis') || text.includes('synthesis')) {
+    return 'Literature review';
+  }
+  if (text.includes('experiment') || text.includes('trial')) {
+    return 'Experimental research';
+  }
+  
+  return 'Research analysis';
+}
+
+function calculateRelevanceScore(paper: any): number {
+  let score = 5; // Base score
+  
+  // Boost for open access
+  if (paper.isOpenAccess) score += 2;
+  
+  // Boost for recent publications
+  const currentYear = new Date().getFullYear();
+  if (paper.year && currentYear - paper.year <= 2) score += 1;
+  
+  // Boost for high citations relative to age
+  if (paper.year && paper.citationCount) {
+    const yearsOld = currentYear - paper.year + 1;
+    const citationsPerYear = paper.citationCount / yearsOld;
+    if (citationsPerYear > 10) score += 2;
+    else if (citationsPerYear > 5) score += 1;
+  }
+  
+  // Boost for having abstract (indicates more complete data)
+  if (paper.abstract && paper.abstract.length > 100) score += 1;
+  
+  return Math.min(10, score);
+}
+
+/**
+ * Get related papers based on a paper's characteristics
+ */
+export async function getRelatedPapers(paper: ResearchPaper, enhanceWithGeography: boolean = true): Promise<ResearchPaper[]> {
+  try {
+    // Create search query from paper's subfields
+    const searchTerms = paper.geographySubfields.join(' ');
+    const relatedPapers = await smartSemanticScholarSearch(searchTerms, enhanceWithGeography);
+    
+    // Filter out the original paper and return top 5
+    return relatedPapers
+      .filter(p => p.id !== paper.id)
+      .slice(0, 5);
+      
+  } catch (error) {
+    console.warn('⚠️ Error fetching related papers, returning empty array:', error);
+    return []; // Return empty array instead of throwing
+  }
+}

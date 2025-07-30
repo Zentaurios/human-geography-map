@@ -68,13 +68,13 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, viewMode, onSelect }) => {
       return 'View via DOI';
     }
     if (url.includes('openalex.org')) {
-      return 'View on OpenAlex';
+      return 'OpenAlex';
     }
     if (url.includes('semanticscholar.org')) {
-      return 'View on Semantic Scholar';
+      return 'Semantic Scholar';
     }
     if (url.includes('scholar.google.com')) {
-      return 'Search Scholar';
+      return 'Find Similar';
     }
     if (url.includes('.pdf')) {
       return 'Download PDF';

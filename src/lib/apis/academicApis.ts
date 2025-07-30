@@ -2,11 +2,7 @@
 import { AcademicAPIs } from '@/types/research.types';
 
 export const ACADEMIC_APIS: AcademicAPIs = {
-  semanticScholar: {
-    baseUrl: 'https://api.semanticscholar.org/graph/v1',
-    rateLimit: '100 requests/5 minutes',
-    requiresAuth: false,
-  },
+  // Removed Semantic Scholar - not suitable for multi-user applications due to rate limits
   openAlex: {
     baseUrl: 'https://api.openalex.org',
     rateLimit: '100,000 requests/day',
@@ -21,22 +17,19 @@ export const ACADEMIC_APIS: AcademicAPIs = {
 };
 
 export const API_USAGE_STRATEGY = {
-  semanticScholar: {
-    rateLimit: '100 per 5 minutes',
-    cacheDuration: 12 * 60 * 60 * 1000, // 12 hours
-    useFor: 'Primary research source with AI summaries and related papers',
-    priorityTopics: ['human geography', 'urban planning', 'climate geography'],
-  },
   openAlex: {
     dailyLimit: 100000,
     requestsPerHour: 4000, // Conservative estimate
     cacheDuration: 24 * 60 * 60 * 1000, // 24 hours
-    useFor: 'Fallback research source and metadata validation',
+    useFor: 'Primary research source - unlimited and reliable',
+    priority: 1, // Primary source
   },
+  // Removed Semantic Scholar strategy - using OpenAlex exclusively
   crossRef: {
     unlimited: true,
     cacheDuration: 7 * 24 * 60 * 60 * 1000, // 7 days
     useFor: 'Metadata validation and DOI resolution',
+    priority: 2, // Metadata only (promoted from priority 3)
   },
 };
 

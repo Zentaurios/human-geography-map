@@ -3,36 +3,72 @@
 import { ResearchPaper } from '@/types/research.types';
 import { ACADEMIC_APIS } from './academicApis';
 
-// OpenAlex API integration for academic papers (fallback source)
-export async function fetchFromOpenAlex(query: string): Promise<ResearchPaper[]> {
+// OpenAlex API integration for academic papers - SIMPLIFIED AND MORE INCLUSIVE
+export async function fetchFromOpenAlex(query: string, enhanceWithGeography: boolean = true): Promise<ResearchPaper[]> {
   try {
-    // Use simple search without complex filters
+    console.log('🔍 OpenAlex basic search for:', query);
+    
+    // Don't automatically add geography - let users search for what they want
+    const searchQuery = query; // Use original query
+    
+    // Much simpler parameters
     const params = new URLSearchParams({
-      search: query,
-      per_page: '25',
-      mailto: ACADEMIC_APIS.openAlex.contactEmail!,
+      search: searchQuery,
+      per_page: '30',
+      sort: 'cited_by_count:desc',
+      mailto: ACADEMIC_APIS.openAlex.contactEmail || 'contact@example.com',
     });
 
     const response = await fetch(
       `${ACADEMIC_APIS.openAlex.baseUrl}/works?${params}`,
       {
         headers: {
-          'User-Agent': `HumanGeographyLearning/1.0 (${ACADEMIC_APIS.openAlex.contactEmail})`,
+          'User-Agent': `HumanGeographyLearning/1.0 (${ACADEMIC_APIS.openAlex.contactEmail || 'contact@example.com'})`,
         },
-        next: { revalidate: 86400 }, // Cache for 24 hours
+        next: { revalidate: 3600 }, // 1 hour cache
       }
     );
 
     if (!response.ok) {
-      console.error('OpenAlex API error:', response.status, response.statusText);
+      console.warn('⚠️ OpenAlex basic search failed:', response.status, response.statusText);
       return [];
     }
 
     const data = await response.json();
+    console.log('📊 OpenAlex basic search results:', data.results?.length || 0);
     
-    return data.results?.map((work: any) => transformOpenAlexWork(work)) || [];
+    const allResults = data.results?.map((work: any) => transformOpenAlexWork(work)) || [];
+    
+    // Much more lenient filtering
+    if (!enhanceWithGeography) {
+      return allResults;
+    }
+    
+    // Very inclusive geography filtering
+    const filteredResults = allResults.filter((paper: ResearchPaper) => {
+      const searchText = `${paper.title} ${paper.abstract}`.toLowerCase();
+      
+      // Super broad terms that include most social science research
+      const inclusiveTerms = [
+        'geography', 'geographic', 'spatial', 'urban', 'rural', 'city', 'cities',
+        'human', 'people', 'society', 'social', 'community', 'population',
+        'environment', 'climate', 'development', 'culture', 'economic', 'political',
+        'study', 'research', 'analysis', 'location', 'place', 'area', 'region'
+      ];
+      
+      const isRelevant = inclusiveTerms.some(term => searchText.includes(term));
+      
+      // Include any paper with a decent abstract
+      const hasGoodContent = paper.abstract && paper.abstract.length > 30;
+      
+      return isRelevant || hasGoodContent;
+    });
+    
+    console.log('🌍 After basic geography filter:', filteredResults.length);
+    return filteredResults;
+    
   } catch (error) {
-    console.error('OpenAlex API error:', error);
+    console.error('❌ OpenAlex basic search error:', error);
     return [];
   }
 }
@@ -75,6 +111,7 @@ function extractBestUrl(work: any): string | undefined {
   // 3. Publisher landing page URL
   // 4. DOI URL (constructed)
   // 5. OpenAlex page URL (fallback)
+  // 6. No search URL fallbacks
   
   // Check for open access PDF
   if (work.open_access?.oa_url) {
@@ -86,11 +123,18 @@ function extractBestUrl(work: any): string | undefined {
     return work.host_venue.url;
   }
   
-  // Construct DOI URL if DOI exists
+  // Construct DOI URL if DOI exists and is valid
   if (work.doi) {
     // Remove any existing URL prefix from DOI
     const cleanDoi = work.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '');
-    return `https://doi.org/${cleanDoi}`;
+    
+    // Basic DOI validation - should have format like "10.xxxx/xxxxx"
+    if (cleanDoi.match(/^10\.[0-9]{4,}\/[\S]+/)) {
+      return `https://doi.org/${cleanDoi}`;
+    } else {
+      // If DOI format is invalid, don't use it
+      // Invalid DOI format detected
+    }
   }
   
   // Check for any location URLs
@@ -108,12 +152,7 @@ function extractBestUrl(work: any): string | undefined {
     return work.id; // OpenAlex IDs are already URLs
   }
   
-  // Final fallback: construct a search URL if we have enough info
-  if (work.title) {
-    const searchQuery = encodeURIComponent(work.title);
-    return `https://scholar.google.com/scholar?q=${searchQuery}`;
-  }
-  
+  // Return undefined instead of search URL - let UI handle missing links
   return undefined;
 }
 
@@ -258,94 +297,112 @@ function calculateRelevanceScore(work: any): number {
   return Math.min(10, score);
 }
 
-// Search for papers by topic
+// Search for papers by topic - MUCH MORE INCLUSIVE VERSION
 export async function searchOpenAlexByTopic(topic: string, filters?: {
   openAccess?: boolean;
   yearFrom?: number;
   yearTo?: number;
-}): Promise<ResearchPaper[]> {
-  const filterParams: string[] = [];
-  
-  // Use simple, reliable filters
-  if (filters?.openAccess) {
-    filterParams.push('is_oa:true');
-  }
-  
-  if (filters?.yearFrom) {
-    filterParams.push(`from_publication_date:${filters.yearFrom}-01-01`);
-  }
-  
-  if (filters?.yearTo) {
-    filterParams.push(`to_publication_date:${filters.yearTo}-12-31`);
-  }
-  
-  // Keep it simple - just search for the topic
-  const params = new URLSearchParams({
-    search: topic,
-    per_page: '25',
-    sort: 'cited_by_count:desc',
-    mailto: ACADEMIC_APIS.openAlex.contactEmail!,
-  });
-  
-  // Add filters if any exist
-  if (filterParams.length > 0) {
-    params.append('filter', filterParams.join(','));
-  }
-  
-  console.log('🔗 OpenAlex API URL:', `${ACADEMIC_APIS.openAlex.baseUrl}/works?${params}`);
-  
+}, enhanceWithGeography: boolean = true): Promise<ResearchPaper[]> {
   try {
+    console.log('🔍 OpenAlex search starting for:', topic);
+    
+    // DON'T automatically add geography to every search - this was too restrictive
+    const searchTopic = topic; // Use the original topic as-is
+    
+    const filterParams: string[] = [];
+    
+    // Only add filters if explicitly requested
+    if (filters?.openAccess) {
+      filterParams.push('is_oa:true');
+    }
+    
+    // Be more lenient with date filters 
+    if (filters?.yearFrom && filters.yearFrom > 1900) {
+      filterParams.push(`from_publication_date:${filters.yearFrom}-01-01`);
+    }
+    
+    if (filters?.yearTo && filters.yearTo <= new Date().getFullYear()) {
+      filterParams.push(`to_publication_date:${filters.yearTo}-12-31`);
+    }
+    
+    // Create a much simpler parameter set
+    const params = new URLSearchParams({
+      search: searchTopic,
+      per_page: '50', // Get more results
+      sort: 'cited_by_count:desc',
+      mailto: ACADEMIC_APIS.openAlex.contactEmail || 'contact@example.com',
+    });
+    
+    // Only add filters if they exist
+    if (filterParams.length > 0) {
+      params.append('filter', filterParams.join(','));
+    }
+    
+    console.log('🌐 Calling OpenAlex with URL:', `${ACADEMIC_APIS.openAlex.baseUrl}/works?${params}`);
+    
     const response = await fetch(
       `${ACADEMIC_APIS.openAlex.baseUrl}/works?${params}`,
       {
         headers: {
           'User-Agent': `HumanGeographyLearning/1.0 (${ACADEMIC_APIS.openAlex.contactEmail})`,
         },
-        next: { revalidate: 86400 },
+        next: { revalidate: 3600 }, // Cache for 1 hour instead of 24
       }
     );
     
-    console.log('🔍 OpenAlex API response status:', response.status, response.statusText);
+    console.log('📡 OpenAlex response status:', response.status);
     
     if (!response.ok) {
-      console.error('❌ OpenAlex API error details:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: `${ACADEMIC_APIS.openAlex.baseUrl}/works?${params}`
-      });
-      return []; // Return empty array instead of throwing
+      console.warn(`⚠️ OpenAlex API error: ${response.status} ${response.statusText}`);
+      return [];
     }
     
     const data = await response.json();
-    console.log('📊 OpenAlex API response:', {
-      total_results: data.meta?.count || 'unknown',
-      returned_results: data.results?.length || 0,
-      query: topic
-    });
+    console.log('📊 OpenAlex raw results count:', data.results?.length || 0);
     
-    // Filter results to focus on geography-related papers
-    const geographyResults = data.results?.filter((work: any) => {
-      const title = work.title?.toLowerCase() || '';
-      const abstractText = reconstructAbstract(work.abstract_inverted_index).toLowerCase();
+    if (!data.results || data.results.length === 0) {
+      console.warn('⚠️ OpenAlex returned no results');
+      return [];
+    }
+    
+    // Transform all results
+    const allResults = data.results.map((work: any) => transformOpenAlexWork(work));
+    console.log('🔄 Transformed results count:', allResults.length);
+    
+    // MUCH MORE LENIENT filtering - only filter if geography enhancement is enabled AND it's not a geography search
+    if (enhanceWithGeography && !topic.toLowerCase().includes('geography')) {
+      console.log('🌍 Applying lenient geography filter...');
       
-      // Check if the paper is actually about geography
-      const geographyKeywords = [
-        'geography', 'geographic', 'spatial', 'human geography',
-        'urban', 'rural', 'population', 'demographic', 'migration',
-        'economic geography', 'cultural geography', 'political geography',
-        'climate', 'environmental', 'land use', 'development'
-      ];
+      const filteredResults = allResults.filter((paper: ResearchPaper) => {
+        // Be much more inclusive - check for any social science or spatial terms
+        const searchText = `${paper.title} ${paper.abstract}`.toLowerCase();
+        
+        // Very broad geography and social science keywords
+        const relevantTerms = [
+          'geography', 'geographic', 'spatial', 'urban', 'rural', 'city', 'cities',
+          'population', 'climate', 'environment', 'social', 'society', 'community',
+          'development', 'planning', 'migration', 'settlement', 'human', 'people',
+          'cultural', 'economic', 'political', 'location', 'place', 'region',
+          'land', 'area', 'territory', 'study', 'analysis', 'research'
+        ];
+        
+        const isRelevant = relevantTerms.some(term => searchText.includes(term));
+        
+        // Also include papers with substantial abstracts (likely academic papers)
+        const hasSubstantialContent = paper.abstract && paper.abstract.length > 50;
+        
+        return isRelevant || hasSubstantialContent;
+      });
       
-      return geographyKeywords.some(keyword => 
-        title.includes(keyword) || abstractText.includes(keyword)
-      );
-    }) || [];
+      console.log('🌍 After geography filter:', filteredResults.length);
+      return filteredResults;
+    } else {
+      console.log('🚫 Skipping geography filter');
+      return allResults;
+    }
     
-    console.log(`🔍 Geography-filtered results: ${geographyResults.length} papers`);
-    
-    return geographyResults.map((work: any) => transformOpenAlexWork(work));
   } catch (error) {
-    console.error('OpenAlex topic search error:', error);
+    console.error('❌ OpenAlex search error:', error);
     return [];
   }
 }

@@ -25,6 +25,7 @@ const ResearchFilters: React.FC<ResearchFiltersProps> = ({
   React.useEffect(() => {
     let count = 0;
     if (filters.openAccess) count++;
+    if (!filters.enhanceWithGeography) count++; // Count when geography enhancement is disabled
     if (filters.academicLevel.length < 3) count++; // Default is all 3, so less means filtering
     if (filters.methodology.length > 0) count++;
     if (filters.geographySubfield.length > 0) count++;
@@ -88,6 +89,7 @@ const ResearchFilters: React.FC<ResearchFiltersProps> = ({
       },
       methodology: [],
       geographySubfield: [],
+      enhanceWithGeography: true, // Keep geography enhancement enabled when clearing
     });
   };
 
@@ -166,6 +168,22 @@ const ResearchFilters: React.FC<ResearchFiltersProps> = ({
               className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
             />
             Open Access Only
+          </label>
+          
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={filters.enhanceWithGeography}
+              onChange={(e) => onFilterChange({
+                ...filters,
+                enhanceWithGeography: e.target.checked,
+              })}
+              className="rounded border-slate-300 text-green-600 focus:ring-green-500"
+            />
+            <span className="flex items-center gap-1">
+              🌍 Focus on Geography
+              <span className="text-xs text-slate-500">(recommended)</span>
+            </span>
           </label>
         </div>
 

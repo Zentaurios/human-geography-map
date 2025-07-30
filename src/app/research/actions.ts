@@ -1,95 +1,43 @@
 'use server';
 
 import { ResearchPaper, ResearchFilters } from '@/types/research.types';
-import { fetchFromOpenAlex, searchOpenAlexByTopic } from '@/lib/apis/openAlexApi';
-import { fetchFromSemanticScholar } from '@/lib/apis/semanticScholarApi';
-import { getFallbackResearch } from '@/lib/apis/fallbackResearch';
+import { searchOpenAlexByTopic } from '@/lib/apis/openAlexApi';
+// Removed Semantic Scholar - not suitable for multi-user applications due to rate limits
 
 /**
- * Search for research papers using multiple APIs with fallback strategy
- * Primary: Semantic Scholar (reliable, good abstracts)
- * Fallback: OpenAlex (experimental)
- * Final: Curated database
+ * Search for research papers using OpenAlex API
+ * Reliable, free, and suitable for multi-user applications
  */
 export async function searchResearchPapers(
   query: string, 
   filters?: ResearchFilters
 ): Promise<ResearchPaper[]> {
-  console.log('🔍 Starting research search for:', query, 'with filters:', filters);
   
   try {
-    // Primary: Try Semantic Scholar first (more reliable for geography research)
-    console.log('📖 Attempting Semantic Scholar API call...');
-    const semanticResults = await fetchFromSemanticScholar(query);
-    console.log(`📚 Semantic Scholar raw results: ${semanticResults.length} papers`);
-    
-    if (semanticResults.length > 0) {
-      const filteredResults = applyClientFilters(semanticResults, filters);
-      console.log(`✅ Semantic Scholar filtered results: ${filteredResults.length} papers`);
-      
-      // Combine with some curated papers for better results
-      const curatedResults = getFallbackResearch(query).slice(0, 6);
-      const combinedResults = [...filteredResults, ...curatedResults]
-        .filter((paper, index, self) => 
-          index === self.findIndex(p => p.id === paper.id)
-        ) // Remove duplicates
-        .slice(0, 50); // Limit total results
-      
-      console.log(`🎯 Combined results: ${combinedResults.length} papers`);
-      return combinedResults;
-    }
-
-    // Secondary: Try OpenAlex as fallback (experimental)
-    console.log('🌐 Falling back to OpenAlex...');
+    console.log('🔍 Searching OpenAlex for query:', query);
     const openAlexResults = await searchOpenAlexByTopic(query, {
       openAccess: filters?.openAccess,
       yearFrom: filters?.publicationDateRange?.start,
       yearTo: filters?.publicationDateRange?.end,
-    });
+    }, filters?.enhanceWithGeography ?? true);
     
-    console.log(`📚 OpenAlex raw results: ${openAlexResults.length} papers`);
+    console.log(`✅ OpenAlex returned ${openAlexResults.length} results`);
     
     if (openAlexResults.length > 0) {
       const filteredResults = applyClientFilters(openAlexResults, filters);
-      console.log(`✅ OpenAlex filtered results: ${filteredResults.length} papers`);
-      
-      // Combine with curated papers
-      const curatedResults = getFallbackResearch(query).slice(0, 6);
-      const combinedResults = [...filteredResults, ...curatedResults]
-        .filter((paper, index, self) => 
-          index === self.findIndex(p => p.id === paper.id)
-        )
-        .slice(0, 50);
-      
-      console.log(`🎯 Combined results: ${combinedResults.length} papers`);
-      return combinedResults;
+      return filteredResults.slice(0, 50);
     }
-
-    // Final fallback: Use expanded curated research database
-    console.log('📚 Using expanded curated research database...');
-    const fallbackResults = getFallbackResearch(query);
-    console.log(`✅ Curated database results: ${fallbackResults.length} papers`);
     
-    const filteredResults = applyClientFilters(fallbackResults, filters);
-    console.log(`🎯 Final filtered results: ${filteredResults.length} papers`);
-    
-    return filteredResults;
+    return [];
     
   } catch (error) {
-    console.error('❌ Error searching research papers:', error);
-    
-    // Always return fallback content on error
-    console.log('🔄 Falling back to curated database due to error...');
-    const fallbackResults = getFallbackResearch(query);
-    const filteredResults = applyClientFilters(fallbackResults, filters);
-    console.log(`🎯 Error fallback results: ${filteredResults.length} papers`);
-    
-    return filteredResults;
+    console.warn('⚠️ OpenAlex API error:', error);
+    return [];
   }
 }
 
 /**
- * Get research papers by specific geography category
+ * Get research papers by specific geography category using OpenAlex
  */
 export async function getResearchByCategory(category: string): Promise<ResearchPaper[]> {
   const categoryQueries: Record<string, string> = {
@@ -106,7 +54,7 @@ export async function getResearchByCategory(category: string): Promise<ResearchP
 }
 
 /**
- * Get trending research topics based on recent publications
+ * Get trending research topics using OpenAlex
  */
 export async function getTrendingResearch(): Promise<ResearchPaper[]> {
   const trendingTopics = [
@@ -121,14 +69,11 @@ export async function getTrendingResearch(): Promise<ResearchPaper[]> {
   
   for (const topic of trendingTopics) {
     try {
-      // Use Semantic Scholar as primary for trending research too
-      const results = await fetchFromSemanticScholar(topic);
+      const results = await searchResearchPapers(topic);
       allResults.push(...results.slice(0, 2)); // Take top 2 from each topic
     } catch (error) {
-      console.error(`Error fetching trending topic ${topic}:`, error);
-      // Fallback to curated content for this topic
-      const fallbackResults = getFallbackResearch(topic).slice(0, 1);
-      allResults.push(...fallbackResults);
+      console.warn(`⚠️ Error fetching trending topic ${topic}, continuing:`, error);
+      continue;
     }
   }
   
@@ -144,17 +89,22 @@ export async function getTrendingResearch(): Promise<ResearchPaper[]> {
 export async function getResearchRecommendations(
   currentPaper: ResearchPaper
 ): Promise<ResearchPaper[]> {
-  const searchTerms = [
-    ...currentPaper.geographySubfields,
-    currentPaper.methodology,
-  ].join(' ');
-  
-  const recommendations = await searchResearchPapers(searchTerms);
-  
-  // Filter out the current paper and return similar ones
-  return recommendations
-    .filter(paper => paper.id !== currentPaper.id)
-    .slice(0, 5);
+  try {
+    const searchTerms = [
+      ...currentPaper.geographySubfields,
+      currentPaper.methodology,
+    ].join(' ');
+    
+    const recommendations = await searchResearchPapers(searchTerms);
+    
+    // Filter out the current paper and return similar ones
+    return recommendations
+      .filter(paper => paper.id !== currentPaper.id)
+      .slice(0, 5);
+  } catch (error) {
+    console.warn('⚠️ Error fetching research recommendations:', error);
+    return []; // Return empty array instead of throwing
+  }
 }
 
 /**
